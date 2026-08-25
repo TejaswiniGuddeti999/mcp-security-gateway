@@ -1,0 +1,21 @@
+# Secrets -- never commit real API keys
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Generated at runtime -- regenerable, not source
+gateway_log.db
+eval_results.json
+eval_mcptox_results.json
+
+# Word lock file artifact
+~$*.docx
+
+# Personal / unrelated to this project -- not for this repo
+oauth_learning_demo.py
+mail-protocol-project/
+TejaswiniGuddeti_Resume_ATS.docx
+resume_and_portfolio_blurb.md

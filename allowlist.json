@@ -1,0 +1,21 @@
+{
+  "_comment": "mode 'warn' forwards flagged calls but logs a loud FLAG event. mode 'enforce' blocks them outright. This repo ships in 'enforce' because allowed_tools/trusted_destinations below already cover every tool the demo servers use, so the demo (demo.py) can actually show a BLOCK. If you point this gateway at YOUR OWN server instead, switch back to 'warn' first, watch gateway_log.jsonl to see what would have been blocked, populate allowed_tools/trusted_destinations for your real usage, then flip to 'enforce'.",
+  "mode": "enforce",
+  "allowed_tools": [
+    "get_time",
+    "add_numbers",
+    "get_weather",
+    "read_reviews",
+    "fetch_page",
+    "read_file",
+    "send_message",
+    "check_account_status"
+  ],
+  "_sensitive_fields_comment": "For these tools, check the named argument against trusted_destinations instead of just checking the tool name. Modeled on the WhatsApp MCP exfiltration case: the tool call itself was legitimate, only the destination wasn't.",
+  "sensitive_fields": {
+    "send_message": ["to"]
+  },
+  "trusted_destinations": [
+    "+1-555-0100"
+  ]
+}

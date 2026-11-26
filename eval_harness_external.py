@@ -55,7 +55,7 @@ def main() -> None:
 
     recall = caught / len(cases) if cases else 0.0
 
-    with open(RESULTS_FILE, "w") as f:
+    with open(RESULTS_FILE, "w", encoding="utf-8") as f:
         json.dump(
             {"recall": round(recall, 3), "caught": caught, "total": len(cases), "cases": cases},
             f,

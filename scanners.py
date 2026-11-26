@@ -17,7 +17,7 @@ and zero-width characters (used to split/hide flagged keywords).
 
 Tier 2 (only runs when Tier 1 is ambiguous -- one weak signal, not
 enough to convict, not clean enough to clear): sends the text to
-Groq's free-tier Llama 3.3 70B for a narrow classification call. This
+Groq's free-tier gpt-oss-120b for a narrow classification call. This
 keeps cost near zero -- most text is either obviously clean or
 obviously bad on regex alone; the LLM only gets called on the fraction
 that's genuinely unclear. Degrades gracefully (treats as "not
@@ -25,9 +25,24 @@ suspicious") if GROQ_API_KEY isn't set, so the gateway is fully
 functional -- just regex-only -- with zero API setup.
 """
 
+import logging
 import os
 import re
 from dataclasses import dataclass, field
+
+# Load GROQ_API_KEY from .env here, where it's used, so every entry point
+# (gateway.py, both eval harnesses) gets the LLM tier -- not just gateway.py.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv is optional; the key can also come from the real env
+
+# Groq retires models over time (llama-3.3-70b-versatile now returns 404).
+# Keep the model name in one place so a retirement is a one-line fix.
+LLM_MODEL = "openai/gpt-oss-120b"
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------
 # Tier 1: regex / keyword patterns
@@ -156,7 +171,7 @@ def _regex_scan(text: str) -> ScanResult:
 
 def _llm_scan(text: str) -> ScanResult:
     """Escalation tier -- only ever called on ambiguous regex results.
-    Uses Groq's free-tier API (Llama 3.3 70B)."""
+    Uses Groq's free-tier API (see LLM_MODEL)."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         return ScanResult(
@@ -192,10 +207,13 @@ def _llm_scan(text: str) -> ScanResult:
     try:
         client = Groq(api_key=api_key)
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            max_tokens=100,
+            # gpt-oss "thinks" before answering and those hidden tokens count
+            # toward max_tokens, so 100 would cut the answer off.
+            max_tokens=600,
+            reasoning_effort="low",
         )
         answer = resp.choices[0].message.content.strip()
         is_suspicious = answer.upper().startswith("SUSPICIOUS")
@@ -241,9 +259,19 @@ def scan_text(text: str) -> ScanResult:
         return regex_result
 
     llm_result = _llm_scan(text)
-    if llm_result.tier in ("llm-skipped", "llm-error"):
-        # No key, or the call failed -- fall back to the regex verdict
-        # rather than silently downgrading a "low" confidence result.
+    if llm_result.tier == "llm-error":
+        # Fall back to the regex verdict, but never silently: a retired
+        # model once failed every call here unnoticed, leaving the gateway
+        # regex-only. Log it and keep the reason on the result.
+        logger.warning("LLM tier failed, using regex verdict only: %s", llm_result.reasons[0])
+        return ScanResult(
+            regex_result.suspicious,
+            regex_result.confidence,
+            _dedupe(regex_result.reasons + llm_result.reasons),
+            tier="regex+llm-error",
+        )
+    if llm_result.tier == "llm-skipped":
+        # No key -- regex-only mode by design.
         return regex_result
 
     combined_reasons = _dedupe(regex_result.reasons + llm_result.reasons)

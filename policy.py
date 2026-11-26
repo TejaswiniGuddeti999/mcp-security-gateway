@@ -36,7 +36,7 @@ DEFAULT_ALLOWLIST = {
 def load_allowlist() -> dict:
     if not ALLOWLIST_FILE.exists():
         return dict(DEFAULT_ALLOWLIST)
-    with open(ALLOWLIST_FILE) as f:
+    with open(ALLOWLIST_FILE, encoding="utf-8") as f:
         data = json.load(f)
     data.setdefault("mode", "warn")
     data.setdefault("allowed_tools", [])

@@ -29,7 +29,7 @@ RESULTS_FILE = Path(__file__).parent / "eval_results.json"
 
 
 def load_payloads() -> list:
-    with open(PAYLOADS_FILE) as f:
+    with open(PAYLOADS_FILE, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -109,6 +109,6 @@ def print_report(results: dict) -> None:
 if __name__ == "__main__":
     payloads = load_payloads()
     results = score(payloads)
-    with open(RESULTS_FILE, "w") as f:
+    with open(RESULTS_FILE, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
     print_report(results)

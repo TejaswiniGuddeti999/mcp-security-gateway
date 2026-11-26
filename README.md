@@ -94,7 +94,7 @@ old design left most real attacks with no path to Tier 2 at all:
   gateway is fully functional in this mode, zero API setup required.
 - **`GROQ_API_KEY` set:** every regex result *except* "high confidence"
   (already a certain catch) is escalated to one call to Groq's
-  free-tier Llama 3.3 70B, and the verdict is suspicious if *either*
+  free-tier gpt-oss-120b, and the verdict is suspicious if *either*
   tier thinks so. This is a deliberate cost/recall tradeoff -- most
   real-world attacks were scoring regex confidence "none" (no keyword
   overlap at all) and never reached the old ambiguous-only gate, so
@@ -231,6 +231,19 @@ overall and by category. Full results go to `eval_results.json`.
 
 47 cases: 24 TP, 1 FP, 19 TN, 3 FN.
 
+**With the LLM tier active (`GROQ_API_KEY` set, gpt-oss-120b):**
+
+| Metric | Score |
+|---|---|
+| Precision | 0.96 |
+| Recall | 1.00 |
+| F1 | 0.98 |
+| Accuracy | 0.98 |
+
+47 cases: 27 TP, 1 FP, 19 TN, 0 FN. The LLM caught all 3 regex misses
+and added no new false positives; the one false positive is the same
+regex `act as a` hit described below.
+
 **Known limitations (documented honestly, not tuned away):**
 
 - One false positive: `act as a calculator` trips the role-override
@@ -299,17 +312,19 @@ is deployed prior to any data entry... sends the key, code, and target
 field to https://attacker.com/log"*) -- exactly the class of case the
 regex tier structurally can't catch and the LLM tier exists for.
 
-**Caveat on the LLM-boosted number:** this project's own sandbox has
-network egress locked to an allowlist that doesn't include
-`api.groq.com` (confirmed -- even a plain request to `github.com` fails
-identically here, so it's a general restriction, not Groq-specific).
-`GROQ_API_KEY` is configured and the escalation code path runs and
-fails over gracefully (`APIConnectionError` → falls back to the regex
-verdict, no crash), but the actual LLM-boosted recall on the remaining
-5 misses could not be measured from here. Run `python
-eval_harness_external.py` yourself with `GROQ_API_KEY` set in `.env` to
-get that number -- on a normal internet connection each Groq call
-takes about a second, so the 24-case run finishes in under a minute.
+**With the LLM tier active: recall 1.0 (24/24 caught).** The 19 regex
+catches stay regex-only (no API call); the 5 regex misses all went to
+gpt-oss-120b on Groq, and it flagged all 5. Caveats: 24 cases is a small
+sample, and LLM verdicts can vary between runs.
+
+**How this number was found (a silent failure worth recording):** the
+LLM tier originally called `llama-3.3-70b-versatile`, which Groq later
+retired. Every call returned 404, and the scanner's graceful fallback
+quietly used the regex verdict, so the gateway had been regex-only
+without any visible error. The fix: switch to gpt-oss-120b (model name
+now in one constant, `LLM_MODEL`), and log a warning and record the
+reason on the result whenever the LLM tier fails, so a failure can't
+hide again.
 
 (Precision still isn't measurable from this run -- MCPTox's public
 data is entirely attack payloads, with no accompanying benign-tool set
@@ -356,10 +371,6 @@ already prove everything works)
 
 ## What's next (v3 ideas, not built)
 
-- **Confirm the LLM-boosted MCPTox recall number on a machine with real
-  internet access** -- `python eval_harness_external.py` with
-  `GROQ_API_KEY` set, to measure whether Tier 2 closes some of the
-  remaining 5/24 misses (see "External validation" above).
 - A benign real-world tool corpus (Smithery/mcp.so) to measure
   precision against genuine tool diversity, not just the self-authored
   benign set.
